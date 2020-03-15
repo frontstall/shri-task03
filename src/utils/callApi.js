@@ -1,0 +1,25 @@
+import axios from 'axios';
+import https from 'https';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const { TOKEN } = process.env;
+const DB_API = 'https://hw.shri.yandex/api/';
+
+// eslint-disable-next-line consistent-return
+const callApi = async ({ method, url, data }) => {
+  axios.defaults.httpsAgent = new https.Agent({ rejectUnauthorized: false });
+  axios.defaults.baseURL = DB_API;
+  axios.defaults.headers.common.Authorization = `Bearer ${TOKEN}`;
+
+  try {
+    const response = await axios({ method, url, data });
+
+    return response;
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+export default callApi;
