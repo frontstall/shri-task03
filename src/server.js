@@ -1,34 +1,52 @@
 import Express from 'express';
 import morgan from 'morgan';
-import bodyParser from 'body-parser';
 import Git from 'nodegit';
+import fs from 'fs';
+import del from 'del';
 
 import {
   callApi,
+  clone,
   getPathToLocalRepo,
-  getPathToRemoteRepo,
+  getRepoName,
 } from './utils';
 
 const API_ROOT = '/api';
+const DEFAULT_REPO_NAME = 'mock';
 
 const initServer = (port) => {
   const app = new Express();
   const logger = morgan('combined');
   app.use(logger);
-  app.use(bodyParser.urlencoded({ extended: false }));
+  app.use(Express.json());
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'OPTIONS, DELETE, POST, GET');
+    res.header('Access-Control-Allow-Headers', 'Origin, Content-Type, Accept');
+    next();
+  });
 
   app.post(`${API_ROOT}/settings`, async (req, res, next) => {
     try {
-      const { period, repoName } = req.body;
-      const pathToRemoteRepo = getPathToRemoteRepo(repoName);
+      const {
+        period,
+        repoUrl,
+        buildCommand,
+        mainBranch,
+      } = req.body;
 
-      await Git.Clone(pathToRemoteRepo, `repos/${repoName}`);
-
+      const repoName = getRepoName(repoUrl) || DEFAULT_REPO_NAME;
       const data = {
-        ...req.body,
+        buildCommand,
+        mainBranch: mainBranch || 'master',
         period: parseInt(period, 10),
+        repoName,
       };
+      const pathToLocalRepo = getPathToLocalRepo(repoName);
 
+      await del(pathToLocalRepo);
+      await fs.promises.mkdir(pathToLocalRepo);
+      await clone(repoUrl, pathToLocalRepo);
       await callApi({ method: 'POST', url: '/conf', data });
     } catch (error) {
       next(error);
@@ -68,7 +86,7 @@ const initServer = (port) => {
       const { data } = await callApi({
         method: 'GET',
         url: '/build/details',
-        data: { buildId: req.params.buildId },
+        params: { buildId: req.params.buildId },
       });
       res.send(data);
     } catch (error) {
@@ -80,8 +98,8 @@ const initServer = (port) => {
     try {
       const { data } = await callApi({
         method: 'GET',
-        url: '/build/logs',
-        data: { buildId: req.params.buildId },
+        url: '/build/log',
+        params: { buildId: req.params.buildId },
       });
       res.send(data);
     } catch (error) {
@@ -92,13 +110,7 @@ const initServer = (port) => {
   app.post(`${API_ROOT}/builds/:commitHash`, async (req, res, next) => {
     const { commitHash } = req.params;
     try {
-      const {
-        data:
-        {
-          data:
-          { repoName, mainBranch },
-        },
-      } = await callApi({ method: 'GET', url: '/conf' });
+      const { data: { repoName, mainBranch } } = await callApi({ method: 'GET', url: '/conf' });
       const pathToLocalRepo = getPathToLocalRepo(repoName);
       const repo = await Git.Repository.open(pathToLocalRepo);
       const commit = await repo.getCommit(commitHash);
@@ -111,8 +123,8 @@ const initServer = (port) => {
         authorName,
       };
 
-      await callApi({ method: 'POST', url: '/build/request', data });
-      res.status(204).end();
+      const response = await callApi({ method: 'POST', url: '/build/request', data });
+      res.send(response);
     } catch (error) {
       next(error);
     }

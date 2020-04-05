@@ -8,15 +8,25 @@ const { TOKEN } = process.env;
 const DB_API = 'https://hw.shri.yandex/api/';
 
 // eslint-disable-next-line consistent-return
-const callApi = async ({ method, url, data }) => {
+const callApi = async ({
+  method,
+  url,
+  data,
+  params,
+}) => {
   axios.defaults.httpsAgent = new https.Agent({ rejectUnauthorized: false });
   axios.defaults.baseURL = DB_API;
   axios.defaults.headers.common.Authorization = `Bearer ${TOKEN}`;
 
   try {
-    const response = await axios({ method, url, data });
+    const response = await axios({
+      method,
+      url,
+      data,
+      params,
+    });
 
-    return response;
+    return response.data;
   } catch (error) {
     console.error(error);
   }
